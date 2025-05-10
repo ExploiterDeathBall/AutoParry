@@ -1,0 +1,124 @@
+print("Ball Freezer, For DB Script V0.2 Alpha, Patch: 2, By: The Lite")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local localPlayer = Players.LocalPlayer
+
+local Keybind = Enum.KeyCode.Three
+local TELEPORT_OFFSET = Vector3.new(1000000000000000000000, 1000000000000000000000, 0) -- X-(+ = Right/- = Left) Y-(+ = Up/- = Down) Z
+local WAIT_DURATION = 1.5
+
+print("Suitable for 2 Denjin ability")
+
+local debounce = false
+local activeTempPart = nil
+
+local function getCharacterAndHRP()
+    local character = localPlayer.Character
+    if not character or not character.Parent then
+        return nil, nil, nil
+    end
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then
+        return character, nil, nil
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return character, humanoidRootPart, nil
+    end
+    return character, humanoidRootPart, humanoid
+end
+
+local function cleanupTempPart()
+    if activeTempPart and activeTempPart.Parent then
+        activeTempPart:Destroy()
+    end
+    activeTempPart = nil
+end
+
+local function activateTeleportAbility()
+    if debounce then return end
+    debounce = true
+
+    local character, humanoidRootPart, humanoid = getCharacterAndHRP()
+    if not humanoidRootPart or not humanoid then
+        debounce = false
+        return
+    end
+
+    cleanupTempPart()
+
+    local characterExtents = character:GetExtentsSize()
+    local initialHrpPosition = humanoidRootPart.Position
+
+    local tempPart = Instance.new("Part")
+    tempPart.Name = "PlayerTeleportAnchor_" .. localPlayer.UserId
+    tempPart.Size = Vector3.new(4, 1, 4)
+    tempPart.Anchored = true
+    tempPart.CanCollide = false
+    tempPart.Transparency = 1
+    tempPart.Position = initialHrpPosition - Vector3.new(0, (characterExtents.Y / 2) + (tempPart.Size.Y / 2) + 0.1, 0)
+    tempPart.Parent = game.Workspace
+    activeTempPart = tempPart
+
+    task.wait(WAIT_DURATION)
+
+    character, humanoidRootPart, humanoid = getCharacterAndHRP()
+    if not humanoidRootPart or not humanoid or humanoid.Health <= 0 then
+        cleanupTempPart()
+        debounce = false
+        return
+    end
+    
+    humanoidRootPart.CFrame = humanoidRootPart.CFrame + TELEPORT_OFFSET
+    
+    task.wait(WAIT_DURATION)
+
+    character, humanoidRootPart, humanoid = getCharacterAndHRP()
+    if not humanoidRootPart or not humanoid or humanoid.Health <= 0 then
+        cleanupTempPart()
+        debounce = false
+        return
+    end
+
+    if not activeTempPart or not activeTempPart.Parent then
+        debounce = false
+        return
+    end
+    
+    characterExtents = character:GetExtentsSize()
+    local characterBottomToHrpOffset = characterExtents.Y / 2
+    local targetPosition = activeTempPart.Position + Vector3.new(0, (activeTempPart.Size.Y / 2) + characterBottomToHrpOffset, 0)
+    humanoidRootPart.CFrame = CFrame.new(targetPosition)
+    
+    cleanupTempPart()
+    
+    debounce = false
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Keybind then
+        task.spawn(activateTeleportAbility)
+		print("Ability Activated")
+    end
+end)
+
+local function onCharacterAdded(character)
+    local oldPart = game.Workspace:FindFirstChild("PlayerTeleportAnchor_" .. localPlayer.UserId)
+    if oldPart then
+        oldPart:Destroy()
+    end
+    
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.Died:Connect(function()
+        cleanupTempPart()
+        debounce = false
+    end)
+end
+
+if localPlayer.Character then
+    onCharacterAdded(localPlayer.Character)
+end
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
